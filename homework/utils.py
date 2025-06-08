@@ -1,58 +1,8 @@
-"""
-Escriba el codigo que ejecute la accion solicitada.
-"""
-
-# pylint: disable=import-outside-toplevel
 import os
+import zipfile
 import pandas as pd
-from homework.utils import get_dataframes_from_zip
-
 
 def clean_campaign_data():
-    """
-    En esta tarea se le pide que limpie los datos de una campaña de
-    marketing realizada por un banco, la cual tiene como fin la
-    recolección de datos de clientes para ofrecerls un préstamo.
-
-    La información recolectada se encuentra en la carpeta
-    files/input/ en varios archivos csv.zip comprimidos para ahorrar
-    espacio en disco.
-
-    Usted debe procesar directamente los archivos comprimidos (sin
-    descomprimirlos). Se desea partir la data en tres archivos csv
-    (sin comprimir): client.csv, campaign.csv y economics.csv.
-    Cada archivo debe tener las columnas indicadas.
-
-    Los tres archivos generados se almacenarán en la carpeta files/output/.
-
-    client.csv:
-    - client_id
-    - age
-    - job: se debe cambiar el "." por "" y el "-" por "_"
-    - marital
-    - education: se debe cambiar "." por "_" y "unknown" por pd.NA
-    - credit_default: convertir a "yes" a 1 y cualquier otro valor a 0
-    - mortage: convertir a "yes" a 1 y cualquier otro valor a 0
-
-    campaign.csv:
-    - client_id
-    - number_contacts
-    - contact_duration
-    - previous_campaing_contacts
-    - previous_outcome: cmabiar "success" por 1, y cualquier otro valor a 0
-    - campaign_outcome: cambiar "yes" por 1 y cualquier otro valor a 0
-    - last_contact_day: crear un valor con el formato "YYYY-MM-DD",
-        combinando los campos "day" y "month" con el año 2022.
-
-    economics.csv:
-    - client_id
-    - const_price_idx
-    - eurobor_three_months
-
-
-
-    """
-
     input_folder = "files/input/"
     output_folder = "files/output/"
     
@@ -74,14 +24,14 @@ def clean_campaign_data():
     # credit_default: "yes" a 1, otro valor a 0
     client["credit_default"] = (data["credit_default"] == "yes").astype(int)
     # mortage: "yes" a 1, otro valor a 0
-    client["mortgage"] = (data["mortgage"] == "yes").astype(int)
+    client["mortage"] = (data["mortage"] == "yes").astype(int)
 
     # 4. Procesar campaign.csv
     campaign = pd.DataFrame()
     campaign["client_id"] = data["client_id"]
     campaign["number_contacts"] = data["number_contacts"]
     campaign["contact_duration"] = data["contact_duration"]
-    campaign["previous_campaign_contacts"] = data["previous_campaign_contacts"]
+    campaign["previous_campaing_contacts"] = data["previous_campaing_contacts"]
     # previous_outcome: "success" a 1, otro valor a 0
     campaign["previous_outcome"] = (data["previous_outcome"] == "success").astype(int)
     # campaign_outcome: "yes" a 1, otro valor a 0
@@ -93,13 +43,13 @@ def clean_campaign_data():
     }
     day_str = data["day"].astype(str).str.zfill(2)
     month_str = data["month"].str.lower().map(month_map)
-    campaign["last_contact_date"] = "2022-" + month_str + "-" + day_str
+    campaign["last_contact_day"] = "2022-" + month_str + "-" + day_str
 
     # 5. Procesar economics.csv
     economics = pd.DataFrame()
     economics["client_id"] = data["client_id"]
-    economics["cons_price_idx"] = data["cons_price_idx"]
-    economics["euribor_three_months"] = data["euribor_three_months"]
+    economics["const_price_idx"] = data["cons_price_idx"]
+    economics["eurobor_three_months"] = data["euribor_three_months"]
 
     # 6. Guardar los archivos
     os.makedirs(output_folder, exist_ok=True)
@@ -109,6 +59,16 @@ def clean_campaign_data():
 
     return
 
+def get_dataframes_from_zip(input_folder):
+    all_dfs = []
 
-if __name__ == "__main__":
-    clean_campaign_data()
+    # 1. Leer todos los archivos .zip en la carpeta de entrada
+    for filename in os.listdir(input_folder):
+        if filename.endswith(".zip"):
+            zip_path = os.path.join(input_folder, filename)
+            with zipfile.ZipFile(zip_path, "r") as z:
+                for csv_filename in z.namelist():
+                    with z.open(csv_filename) as f:
+                        df = pd.read_csv(f)
+                        all_dfs.append(df)
+    return all_dfs
