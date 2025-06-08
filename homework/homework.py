@@ -5,7 +5,7 @@ Escriba el codigo que ejecute la accion solicitada.
 # pylint: disable=import-outside-toplevel
 import os
 import pandas as pd
-from homework.utils import get_dataframes_from_zip
+from homework.utils import load_and_combine_dataframes, save_processed_data, select_columns, apply_transformations, generate_last_contact_date
 
 
 def clean_campaign_data():
@@ -55,60 +55,51 @@ def clean_campaign_data():
 
     input_folder = "files/input/"
     output_folder = "files/output/"
-    
-    all_dfs = get_dataframes_from_zip(input_folder)
 
-    # 2. Unir todos los DataFrames en uno solo
-    data = pd.concat(all_dfs, ignore_index=True)
+    # 1. Cargar data original combinada desde ZIP
+    data = load_and_combine_dataframes(input_folder)
 
-    # 3. Procesar client.csv
-    client = pd.DataFrame()
-    client["client_id"] = data["client_id"]
-    client["age"] = data["age"]
-    # job: "." por "" y "-" por "_"
-    client["job"] = data["job"].str.replace(".", "", regex=False).str.replace("-", "_", regex=False)
-    client["marital"] = data["marital"]
-    # education: "." por "_" y "unknown" por pd.NA
-    client["education"] = data["education"].str.replace(".", "_", regex=False)
-    client["education"] = client["education"].replace("unknown", pd.NA)
-    # credit_default: "yes" a 1, otro valor a 0
-    client["credit_default"] = (data["credit_default"] == "yes").astype(int)
-    # mortage: "yes" a 1, otro valor a 0
-    client["mortgage"] = (data["mortgage"] == "yes").astype(int)
+    #2. Seleccionar columnas relevantes para cada DataFrame
+    client_columns = ["client_id", "age", "job", "marital", "education", "credit_default", "mortgage"]
+    client_df = select_columns(data, client_columns)
 
-    # 4. Procesar campaign.csv
-    campaign = pd.DataFrame()
-    campaign["client_id"] = data["client_id"]
-    campaign["number_contacts"] = data["number_contacts"]
-    campaign["contact_duration"] = data["contact_duration"]
-    campaign["previous_campaign_contacts"] = data["previous_campaign_contacts"]
-    # previous_outcome: "success" a 1, otro valor a 0
-    campaign["previous_outcome"] = (data["previous_outcome"] == "success").astype(int)
-    # campaign_outcome: "yes" a 1, otro valor a 0
-    campaign["campaign_outcome"] = (data["campaign_outcome"] == "yes").astype(int)
-    # last_contact_day: combinar day y month con año 2022
+    campaign_columns = ["client_id", "number_contacts", "contact_duration", "previous_campaign_contacts",
+                         "previous_outcome", "campaign_outcome", "day", "month"]
+    campaign_df = select_columns(data, campaign_columns)
+
+    economics_columns = ["client_id", "cons_price_idx", "euribor_three_months"]
+    economics_df = select_columns(data, economics_columns)
+
+
+    # 3. Procesar y transformar los DataFrames
+    client_transforms = {
+        "job": lambda x: x.str.replace(".", "", regex=False).str.replace("-", "_", regex=False),
+        "education": lambda x: x.str.replace(".", "_", regex=False).replace("unknown", pd.NA),
+        "credit_default": lambda x: (x == "yes").astype(int),
+        "mortgage": lambda x: (x == "yes").astype(int)
+    }
+    client_df = apply_transformations(client_df, client_transforms)
+
+    campaign_transforms = {
+        "previous_outcome": lambda x: (x == "success").astype(int),
+        "campaign_outcome": lambda x: (x == "yes").astype(int)
+    }
+    campaign_df = apply_transformations(campaign_df, campaign_transforms)
+
     month_map = {
         "jan": "01", "feb": "02", "mar": "03", "apr": "04", "may": "05", "jun": "06",
         "jul": "07", "aug": "08", "sep": "09", "oct": "10", "nov": "11", "dec": "12"
     }
-    day_str = data["day"].astype(str).str.zfill(2)
-    month_str = data["month"].str.lower().map(month_map)
-    campaign["last_contact_date"] = "2022-" + month_str + "-" + day_str
+    campaign_df = generate_last_contact_date(campaign_df, month_map)
 
-    # 5. Procesar economics.csv
-    economics = pd.DataFrame()
-    economics["client_id"] = data["client_id"]
-    economics["cons_price_idx"] = data["cons_price_idx"]
-    economics["euribor_three_months"] = data["euribor_three_months"]
 
-    # 6. Guardar los archivos
-    os.makedirs(output_folder, exist_ok=True)
-    client.to_csv(os.path.join(output_folder, "client.csv"), index=False)
-    campaign.to_csv(os.path.join(output_folder, "campaign.csv"), index=False)
-    economics.to_csv(os.path.join(output_folder, "economics.csv"), index=False)
+    # 4. Guardar resultados
 
-    return
-
+    save_processed_data(output_folder, {
+        "client": client_df,
+        "campaign": campaign_df,
+        "economics": economics_df
+    })
 
 if __name__ == "__main__":
     clean_campaign_data()
